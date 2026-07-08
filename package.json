@@ -1,0 +1,23 @@
+{
+  "name": "image-compressor",
+  "version": "1.0.0",
+  "description": "Client-side PNG/JPG/JPEG compressor that shrinks images under a target size while preserving the original format. Pure HTML/CSS/JS, no build step required.",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "npx --yes http-server . -p 8080 -c-1",
+    "serve": "npx --yes http-server . -p 8080 -c-1"
+  },
+  "keywords": [
+    "image-compression",
+    "png",
+    "jpeg",
+    "browser",
+    "canvas",
+    "javascript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/image-compressor.git"
+  }
+}
