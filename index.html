@@ -3,65 +3,233 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Image Compressor — Under 2MB</title>
-  <meta name="description" content="Client-side PNG/JPG/JPEG compressor that shrinks images under a target size while keeping the original format." />
+
+  <title>Under2MB — Image Compressor</title>
+
+  <meta
+    name="description"
+    content="Compress PNG, JPG and JPEG images to your target file size directly in your browser. Batch compress images and download them as a ZIP."
+  />
+
+  <meta name="theme-color" content="#0b0b0d" />
+
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+  <link rel="stylesheet" href="style.css" />
+
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+    defer
+  ></script>
+
+  <script type="module" src="main.js"></script>
 </head>
+
 <body>
   <div class="wrap">
+
     <header class="page-header">
-      <h1>Image Compressor</h1>
-      <p class="sub">
-        Drop in PNG / JPG / JPEG files — anything over the size limit gets
-        compressed automatically and comes back out in the same format.
-      </p>
+      <a class="brand" href="./" aria-label="Under2MB home">
+        <span class="brand-mark" aria-hidden="true">U</span>
+        <span>under<span class="brand-accent">2</span>mb</span>
+      </a>
+
+      <div class="header-content">
+        <span class="eyebrow">FREE ONLINE IMAGE TOOL</span>
+
+        <h1>Smaller images.<br />Same format.</h1>
+
+        <p class="sub">
+          Compress your images to your desired size. Upload multiple files,
+          process them in your browser, and download them individually or
+          together in a ZIP.
+        </p>
+      </div>
     </header>
 
-    <section class="dropzone" id="dropzone" tabindex="0" aria-label="Upload images">
-      <p><strong>Click to choose files</strong> or drag &amp; drop them here</p>
-      <p class="accepted">Accepted: .png, .jpg, .jpeg</p>
-      <input
-        type="file"
-        id="fileInput"
-        accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-        multiple
-      />
-    </section>
+    <main>
+      <section
+        class="dropzone"
+        id="dropzone"
+        tabindex="0"
+        role="button"
+        aria-label="Choose images or drag and drop them here"
+      >
+        <input
+          type="file"
+          id="fileInput"
+          accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+          multiple
+          hidden
+        />
 
-    <section class="toolbar">
-      <div class="limit-field">
-        <label for="limitInput">Target limit:</label>
-        <input type="number" id="limitInput" value="2" min="0.1" step="0.1" />
-        <span>MB</span>
-      </div>
-      <div class="spacer"></div>
-      <button class="btn secondary" id="clearBtn" disabled>Clear all</button>
-      <button class="btn" id="downloadZipBtn" disabled>Download all as .zip</button>
-    </section>
+        <div class="upload-icon" aria-hidden="true">
+          <svg
+            width="34"
+            height="34"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 16V4" />
+            <path d="m7 9 5-5 5 5" />
+            <path d="M20 16.5v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2" />
+          </svg>
+        </div>
 
-    <section class="list" id="list" aria-live="polite">
-      <div class="row head">
-        <div></div>
-        <div>File</div>
-        <div>Original</div>
-        <div>Compressed</div>
-        <div>Status</div>
-        <div>Action</div>
-      </div>
-      <div class="empty" id="emptyMsg">No files yet — add some images above.</div>
-    </section>
+        <h2>Drop your images here</h2>
+
+        <p>
+          Or <span class="upload-link">browse files</span> from your device
+        </p>
+
+        <div class="upload-meta">
+          <span>PNG</span>
+          <span>JPG</span>
+          <span>JPEG</span>
+          <span>Multiple files supported</span>
+        </div>
+
+        <p class="accepted">
+          Your files stay on your device while processing.
+        </p>
+      </section>
+
+      <section class="toolbar" aria-label="Compression settings">
+        <div class="limit-field">
+          <label for="limitInput">Target file size</label>
+
+          <div class="limit-input-wrap">
+            <input
+              type="number"
+              id="limitInput"
+              value="2"
+              min="0.1"
+              max="100"
+              step="0.1"
+              inputmode="decimal"
+              aria-describedby="limitHelp"
+            />
+            <span>MB</span>
+          </div>
+
+          <small id="limitHelp">
+            Images larger than this limit will be compressed.
+          </small>
+        </div>
+
+        <div class="toolbar-actions">
+          <button
+            class="btn secondary"
+            id="clearBtn"
+            type="button"
+            disabled
+          >
+            Clear all
+          </button>
+
+          <button
+            class="btn"
+            id="downloadZipBtn"
+            type="button"
+            disabled
+          >
+            Download ZIP
+          </button>
+        </div>
+      </section>
+
+      <section class="list-section" aria-label="Image compression results">
+        <div class="list-heading">
+          <div>
+            <h2>Your images</h2>
+            <p id="fileCount">No files added</p>
+          </div>
+        </div>
+
+        <div class="list" id="list" aria-live="polite" aria-busy="false">
+          <div class="row head">
+            <div class="column-preview">Preview</div>
+            <div class="column-file">File</div>
+            <div class="column-original">Original</div>
+            <div class="column-compressed">Compressed</div>
+            <div class="column-status">Status</div>
+            <div class="column-action">Action</div>
+          </div>
+
+          <div class="empty" id="emptyMsg">
+            <span class="empty-icon" aria-hidden="true">＋</span>
+            <p>No images yet</p>
+            <span>Add images above to get started.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="info-section">
+        <h2>How it works</h2>
+
+        <div class="info-grid">
+          <article class="info-card">
+            <span class="info-number">01</span>
+            <h3>Upload</h3>
+            <p>
+              Select one image or add multiple PNG, JPG, and JPEG files.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <span class="info-number">02</span>
+            <h3>Compress</h3>
+            <p>
+              Choose your target size and let the compressor process your
+              images.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <span class="info-number">03</span>
+            <h3>Download</h3>
+            <p>
+              Download each processed image or bundle your results into a
+              ZIP archive.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
 
     <footer class="footnote">
-      Everything runs locally in your browser — files are never uploaded
-      anywhere. PNGs are shrunk by reducing resolution (since PNG is lossless
-      and has no quality knob); JPEGs are shrunk by lowering quality first,
-      then resolution if needed. Files already under the limit are left
-      untouched.
+      <div class="footer-brand">
+        <span class="brand-mark" aria-hidden="true">U</span>
+        <strong>under2mb</strong>
+      </div>
+
+      <p>
+        Image processing runs locally in your browser. Your images are not
+        uploaded to our server by this page.
+      </p>
+
+      <p class="footer-note">
+        PNG compression may require reducing image dimensions. JPEG
+        compression can reduce quality. Reaching the requested size is not
+        guaranteed for every image.
+      </p>
+
+      <p class="copyright">
+        © <span id="currentYear">2026</span> Under2MB
+      </p>
     </footer>
+
   </div>
 
-  <script type="module" src="js/main.js"></script>
+  <script>
+    const yearElement = document.getElementById("currentYear");
+
+    if (yearElement) {
+      yearElement.textContent = new Date().getFullYear();
+    }
+  </script>
 </body>
 </html>
