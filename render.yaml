@@ -9,6 +9,6 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: MAX_UPLOAD_MB
-        value: 100
+        value: 5120
       - key: TARGET_BYTES
         value: 2097152
