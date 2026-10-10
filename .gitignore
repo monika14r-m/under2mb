@@ -1,16 +1,5 @@
-# OS
-.DS_Store
-Thumbs.db
-
-# Editors
-.vscode/
-.idea/
-*.swp
-
-# Node (only relevant if you add dev tooling later)
-node_modules/
-npm-debug.log*
-
-# Misc
-*.log
+__pycache__/
+.venv/
 .env
+*.py[cod]
+.DS_Store
