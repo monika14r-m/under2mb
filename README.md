@@ -1,55 +1,45 @@
 # Under2MB
 
-A deployable, format-aware file-compression dashboard. Upload a supported file, attempt compression, and download the result in the same format when it can meet the configured output target.
+A FastAPI file compressor that attempts to reduce supported files to a chosen target size while retaining the original filename extension/container where supported.
 
 ## Supported formats
 
-- **Images:** JPG/JPEG, PNG, WEBP, BMP, TIFF — recompressed with Pillow.
-- **PDF:** rewritten and optimized with PyMuPDF.
-- **Office Open XML:** DOCX, PPTX, XLSX and macro-enabled DOCM, PPTM, XLSM — ZIP repacking only; reductions may be small.
-- **MP3 audio:** re-encoded using FFmpeg at progressively lower bitrates. This is **lossy compression** and may reduce audio quality. FFmpeg must be installed and available on `PATH`.
-- Unsupported formats are rejected instead of being renamed or wrapped as if that were format-specific compression.
+- Video: MP4, MOV, M4V, MKV, WEBM, AVI
+- Audio: MP3
+- Images: JPG/JPEG, PNG, WEBP, BMP, TIFF
+- PDF
+- Office: DOCX, DOCM, PPTX, PPTM, XLSX, XLSM
 
-## Important limitations
+## Large video uploads
 
-No compressor can guarantee every file will fit below a target size while preserving all content and quality. The app returns an explicit error when it cannot reach the target.
+Video uploads are streamed in 8 MiB chunks to temporary disk storage instead of being read entirely into RAM. FFprobe reads the duration, and FFmpeg calculates a target bitrate from the selected size and duration. It then tries lower audio bitrates and resolutions until the output is below the target. Temporary files are deleted automatically after the request finishes.
 
-For MP3, the backend tries 128, 96, 64, 48, then 32 kbps. Longer audio may still exceed the target at 32 kbps. Keep an original copy if audio quality matters.
+**Important limitations**
+- Video compression is lossy and may reduce visual/audio quality.
+- Not every video can fit under 2 MB. Duration and complexity matter; select 5 MB or 10 MB, or use a shorter clip if compression cannot meet the target.
+- Large uploads can still be blocked by the hosting provider, reverse proxy, browser connection, temporary disk capacity, or memory/CPU limits before the application sees them.
+- The included Render free plan has limited CPU/RAM and is not ideal for large video processing. A configured 5 GB application limit does not guarantee the hosting platform can accept or process 5 GB requests.
+- Temporary processing files are not retained after processing. Do not upload sensitive files to a public instance.
 
 ## Run locally
 
-Python 3.11+ recommended. FFmpeg must be installed and available on `PATH` for MP3 compression.
+Requires Python 3.11+ and FFmpeg/FFprobe installed on the system.
 
 ```bash
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app:app --reload
+uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000.
+For Docker:
 
-### Install FFmpeg
-
-- **Windows:** install FFmpeg and add its `bin` folder to `PATH`.
-- **macOS:** `brew install ffmpeg`
-- **Debian/Ubuntu:** `sudo apt-get install ffmpeg`
-
-## Deploy to Render
-
-1. Connect this repository as a Render Web Service.
-2. Build command: `pip install -r requirements.txt`
-3. Start command: `uvicorn app:app --host 0.0.0.0 --port $PORT`
-4. Ensure FFmpeg is available on the Render runtime for MP3 compression. The included Dockerfile installs FFmpeg, so use Docker deployment.
+```bash
+docker build -t under2mb .
+docker run --rm -p 8000:8000 -e MAX_UPLOAD_MB=5120 under2mb
+```
 
 ## Configuration
 
-- `MAX_UPLOAD_MB`: maximum upload size in MB (default `100`).
-- `TARGET_BYTES`: target output size in bytes (default `2097152`, 2 MiB).
+- `MAX_UPLOAD_MB`: application-level maximum upload size (default 5120 in Render config).
+- `TARGET_BYTES`: default target size in bytes (default 2097152, or 2 MiB).
 
-## Privacy and deployment safety
-
-Files are processed in memory or temporary working storage for audio transcoding; temporary MP3 files are removed when processing ends. Before making this public, add authentication, rate limiting, platform-layer upload limits, and abuse controls. Do not upload sensitive files to a public instance.
+The web UI allows targets of 500 KB, 1 MB, 2 MB, 5 MB and 10 MB.

@@ -14,6 +14,7 @@ TARGET_BYTES = int(os.getenv("TARGET_BYTES", str(2 * 1024 * 1024)))
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "5120"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 OFFICE_EXTS = {".docx", ".pptx", ".xlsx", ".docm", ".pptm", ".xlsm"}
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 IMAGE_FORMATS = {
     ".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG",
     ".webp": "WEBP", ".bmp": "BMP", ".tif": "TIFF", ".tiff": "TIFF",
@@ -36,16 +37,16 @@ INDEX = r"""<!doctype html>
 </head>
 <body><main class="wrap">
 <header class="top"><div class="brand">under<span>2</span>mb<span>.</span></div><div class="pill">PRIVATE · FORMAT-AWARE</div></header>
-<section class="hero"><div class="eyebrow">LESS WEIGHT. SAME FORMAT.</div><h1>Your files, <span style="color:var(--accent)">lighter.</span></h1><p>Compress supported files toward 2 MB, then download in the original file format. If a file can't reach the target safely, we'll tell you.</p></section>
+<section class="hero"><div class="eyebrow">LESS WEIGHT. SAME FORMAT.</div><h1>Your files, <span style="color:var(--accent)">lighter.</span></h1><p>Compress supported files toward your chosen size, then download in the original file format. If a file can't reach the target safely, we'll tell you.</p></section>
 <section class="panel">
-<div class="drop" id="drop"><div><div class="upload-icon">↑</div><h2>Drop your file here</h2><p>or select a file from your device</p><button class="btn" id="choose" type="button">Choose file</button><div class="subtle">Up to MAXLIMIT per file · PDF, JPG, PNG, WEBP, BMP, TIFF, DOCX, DOCM, PPTX, PPTM, XLSX, XLSM</div></div></div>
+<div class="drop" id="drop"><div><div class="upload-icon">↑</div><h2>Drop your file here</h2><p>or select a file from your device</p><button class="btn" id="choose" type="button">Choose file</button><div class="subtle">Up to MAXLIMIT per file · MP4, MOV, M4V, MKV, WEBM, AVI, MP3, PDF, JPG, PNG, WEBP, BMP, TIFF, DOCX, DOCM, PPTX, PPTM, XLSX, XLSM</div></div></div>
 <div class="actions" style="margin:0 0 14px"><label for="target" style="color:var(--muted);font-size:13px">Target maximum size</label><select id="target" style="background:#22242a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><option value="0.5">500 KB</option><option value="1">1 MB</option><option value="2" selected>2 MB</option><option value="5">5 MB</option><option value="10">10 MB</option></select></div>
-<input id="file" type="file" accept=".mp3,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.docx,.pptx,.xlsx,.docm,.pptm,.xlsm" hidden>
+<input id="file" type="file" accept=".mp3,.mp4,.mov,.m4v,.mkv,.webm,.avi,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.docx,.pptx,.xlsx,.docm,.pptm,.xlsm" hidden>
 <div id="picked" style="display:none"><div class="file-row"><div class="file-icon" id="ext">FILE</div><div class="file-info"><div class="file-name" id="filename"></div><div class="file-meta" id="filesize"></div></div><button class="remove" id="remove" title="Remove file" aria-label="Remove file">×</button></div>
 <div class="actions"><span class="subtle" style="margin:0">Target: under <span id="targetLabel">2 MB</span></span><button class="btn" id="compress">Compress file ↗</button></div></div>
 <div class="progress" id="progress"><span></span></div><div class="status" id="status" role="status" aria-live="polite"></div>
 </section>
-<section class="features"><div class="feature"><span>↘</span><b>Format-aware</b><p>Downloads keep the original extension and file format.</p></div><div class="feature"><span>◎</span><b>Honest results</b><p>No fake success if a file remains above the size target.</p></div><div class="feature"><span>⌁</span><b>Short-lived processing</b><p>Files are processed in memory, not stored in an account.</p></div></section>
+<section class="features"><div class="feature"><span>↘</span><b>Format-aware</b><p>Downloads keep the original extension and file format.</p></div><div class="feature"><span>◎</span><b>Honest results</b><p>No fake success if a file remains above the size target.</p></div><div class="feature"><span>⌁</span><b>Short-lived processing</b><p>Files use temporary processing storage and are deleted after processing.</p></div></section>
 <div class="foot"><strong>Note:</strong> Not every file can be reduced below 2 MB without losing content or changing format. Office files may compress only slightly. Avoid uploading sensitive documents to a public deployment.</div>
 </main>
 <script>
@@ -134,6 +135,105 @@ def compress_mp3(data: bytes, target_bytes: int) -> bytes:
         raise ValueError("MP3 was re-encoded at 128, 96, 64, 48 and 32 kbps but still could not reach the target size.")
 
 
+
+def compress_video_file(source: Path, output: Path, ext: str, target_bytes: int) -> Path:
+    """
+    Compress a video from disk instead of loading the source into RAM.
+    Bitrate is calculated from duration and target size, then reduced if necessary.
+    This is much more suitable for large uploads than repeatedly trying CRF settings.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    ffprobe = shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        raise RuntimeError("Video compression requires FFmpeg and FFprobe on the server.")
+
+    probe = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration",
+         "-of", "json", str(source)],
+        capture_output=True, text=True, timeout=120, check=False
+    )
+    if probe.returncode != 0:
+        detail = (probe.stderr or "The video metadata could not be read.").strip()[-400:]
+        raise RuntimeError("Could not inspect this video: " + detail)
+    try:
+        duration = float(json.loads(probe.stdout)["format"]["duration"])
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("The video duration could not be determined.") from exc
+    if not duration or duration <= 0:
+        raise ValueError("The video has no valid duration.")
+
+    # Keep room for container overhead and variable bitrate peaks.
+    total_budget_bps = max(24000, int((target_bytes * 8 * 0.88) / duration))
+    if ext == ".webm":
+        video_codec, audio_codec = "libvpx-vp9", "libopus"
+    elif ext == ".avi":
+        video_codec, audio_codec = "mpeg4", "libmp3lame"
+    else:
+        video_codec, audio_codec = "libx264", "aac"
+
+    # Lower audio rate first, then scale down if the duration makes the target tight.
+    audio_rates = [32000, 24000, 16000, 0]
+    max_heights = [720, 480, 360, 240, 144]
+    last_error = ""
+
+    for audio_bps in audio_rates:
+        video_bps = total_budget_bps - audio_bps
+        if video_bps < 8000:
+            continue
+        for max_height in max_heights:
+            vf = (
+                f"scale='trunc(iw*min(1,{max_height}/ih)/2)*2':"
+                f"'trunc(ih*min(1,{max_height}/ih)/2)*2'"
+            )
+            command = [
+                ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(source), "-map", "0:v:0", "-map", "0:a:0?",
+                "-vf", vf, "-c:v", video_codec, "-b:v", str(video_bps),
+                "-maxrate", str(max(video_bps, 8000)), "-bufsize", str(max(video_bps * 2, 16000)),
+                "-threads", "2",
+            ]
+            if ext == ".webm":
+                command += ["-deadline", "realtime", "-cpu-used", "6", "-row-mt", "1"]
+            elif ext == ".avi":
+                command += ["-qmin", "2", "-qmax", "31"]
+            else:
+                command += ["-preset", "veryfast", "-pix_fmt", "yuv420p"]
+            if audio_bps:
+                command += ["-c:a", audio_codec, "-b:a", str(audio_bps)]
+            else:
+                command += ["-an"]
+            command += ["-map_metadata", "0"]
+            if ext in {".mp4", ".m4v", ".mov"}:
+                command += ["-movflags", "+faststart"]
+            command.append(str(output))
+            try:
+                result = subprocess.run(
+                    command, capture_output=True, text=True, timeout=1800, check=False
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    "Video compression exceeded the 30-minute processing limit. "
+                    "Try a shorter video or choose a larger target size."
+                ) from exc
+            if result.returncode != 0 or not output.exists() or output.stat().st_size == 0:
+                last_error = (result.stderr or "FFmpeg could not encode this video.").strip()[-500:]
+                continue
+            if output.stat().st_size < target_bytes:
+                return output
+            output.unlink(missing_ok=True)
+
+    if last_error:
+        raise RuntimeError("FFmpeg could not process this video: " + last_error)
+    raise ValueError(
+        "This video is too long or complex to fit under the selected size target. "
+        "Choose a larger target (5 or 10 MB), or use a shorter clip. "
+        "A 2 MB target is not realistic for every video, especially long clips."
+    )
+
 def compress_pdf(data: bytes) -> bytes:
     doc = fitz.open(stream=data, filetype="pdf")
     try:
@@ -164,6 +264,55 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
     target_bytes = int(target_mb * 1024 * 1024)
     name = Path(file.filename or "upload.bin").name
     ext = Path(name).suffix.lower()
+
+    # Large videos are streamed to temporary disk storage, not buffered in RAM.
+    if ext in VIDEO_EXTS:
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="under2mb-upload-") as tmp:
+            source = Path(tmp) / ("input" + ext)
+            output = Path(tmp) / ("compressed" + ext)
+            uploaded = 0
+            with source.open("wb") as destination:
+                while True:
+                    chunk = await file.read(8 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    uploaded += len(chunk)
+                    if uploaded > MAX_UPLOAD_BYTES:
+                        raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_MB} MB upload limit.")
+                    destination.write(chunk)
+            await file.close()
+            if uploaded == 0:
+                raise HTTPException(400, "The uploaded file is empty.")
+            if uploaded < target_bytes:
+                out = source.read_bytes()
+            else:
+                try:
+                    compress_video_file(source, output, ext, target_bytes)
+                    out = output.read_bytes()
+                except ValueError as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                except RuntimeError as exc:
+                    raise HTTPException(503, str(exc)) from exc
+
+            if len(out) >= target_bytes:
+                target_label = "500 KB" if target_mb == 0.5 else f"{target_mb:g} MB"
+                raise HTTPException(422, f"Compressed video is {len(out) / 1048576:.2f} MB, still above the {target_label} target.")
+            media = {
+                ".mp4": "video/mp4", ".m4v": "video/x-m4v", ".mov": "video/quicktime",
+                ".mkv": "video/x-matroska", ".webm": "video/webm", ".avi": "video/x-msvideo",
+            }.get(ext, "application/octet-stream")
+            safe_name = name.replace('"', "")
+            return Response(
+                content=out, media_type=media,
+                headers={
+                    "X-Output-Filename": name,
+                    "X-Output-Size": str(len(out)),
+                    "Content-Disposition": f'attachment; filename="{safe_name}"',
+                    "Cache-Control": "no-store",
+                }
+            )
+
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if not data:
         raise HTTPException(400, "The uploaded file is empty.")
@@ -179,7 +328,14 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
             raise HTTPException(422, "This image could not be processed. The file may be damaged or unsupported.") from exc
     elif ext == ".mp3":
         try:
-            out = compress_mp3(data, TARGET_BYTES)
+            out = compress_mp3(data, target_bytes)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
+    elif ext in VIDEO_EXTS:
+        try:
+            out = compress_video(data, ext, target_bytes)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except RuntimeError as exc:
@@ -206,7 +362,9 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
         "Cache-Control": "no-store",
     }
     media = {
-        ".pdf": "application/pdf", ".mp3": "audio/mpeg", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".pdf": "application/pdf", ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".m4v": "video/x-m4v",
+        ".mov": "video/quicktime", ".mkv": "video/x-matroska", ".webm": "video/webm", ".avi": "video/x-msvideo",
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
         ".png": "image/png", ".webp": "image/webp", ".bmp": "image/bmp",
         ".tif": "image/tiff", ".tiff": "image/tiff",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
