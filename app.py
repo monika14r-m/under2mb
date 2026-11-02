@@ -32,7 +32,8 @@ INDEX = r"""<!doctype html>
 .wrap{max-width:980px;margin:auto;padding:30px 22px 70px}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:70px}.brand{font-weight:800;letter-spacing:-.8px;font-size:20px}.brand span{color:var(--accent)}.pill{font-size:12px;border:1px solid var(--line);padding:7px 11px;border-radius:999px;color:var(--muted)}
 .hero{text-align:center;margin-bottom:34px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;font-weight:750}.hero h1{font-size:clamp(38px,7vw,66px);line-height:1.02;letter-spacing:-3px;margin:14px 0}.hero p{color:var(--muted);max-width:570px;margin:0 auto}
 .panel{background:rgba(25,26,32,.94);border:1px solid var(--line);border-radius:22px;padding:22px;max-width:760px;margin:0 auto;box-shadow:0 22px 70px #0003}
-.drop{min-height:245px;border:1.5px dashed #4c4e59;border-radius:16px;display:flex;align-items:center;justify-content:center;text-align:center;padding:26px;cursor:pointer;transition:.2s;background:#ffffff03}.drop.over{border-color:var(--accent);background:#c7f36b0b}.upload-icon{width:54px;height:54px;border-radius:17px;background:#c7f36b18;color:var(--accent);display:grid;place-items:center;margin:0 auto 14px;font-size:25px}.drop h2{font-size:18px;margin:0 0 5px}.drop p{color:var(--muted);margin:0 0 15px;font-size:13px}.btn{border:0;border-radius:11px;padding:12px 17px;background:var(--accent);color:#171a11;font-weight:800;cursor:pointer;font-size:14px}.btn:disabled{opacity:.5;cursor:not-allowed}.subtle{font-size:12px;color:var(--muted);margin-top:14px}.file-row{display:flex;align-items:center;gap:13px;padding:15px 0;border-bottom:1px solid var(--line);margin-top:6px}.file-icon{width:44px;height:48px;display:grid;place-items:center;border-radius:10px;background:#292b33;color:var(--accent);font-size:11px;font-weight:800}.file-info{flex:1;min-width:0}.file-name{font-weight:650;overflow-wrap:anywhere}.file-meta{font-size:12px;color:var(--muted)}.remove{background:transparent;color:var(--muted);border:0;cursor:pointer;font-size:19px}.actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;flex-wrap:wrap}.status{margin-top:18px;border-radius:12px;padding:14px;background:#22242a;color:var(--muted);display:none;overflow-wrap:anywhere}.status.show{display:block}.status.ok{color:#d7ff9b;background:#25301c}.status.bad{color:#ffb2b2;background:#351f23}.progress{height:4px;background:#343640;border-radius:9px;margin-top:12px;overflow:hidden;display:none}.progress span{display:block;width:35%;height:100%;background:var(--accent);animation:move 1s infinite alternate}@keyframes move{to{transform:translateX(180%)}}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:22px auto 0;max-width:760px}.feature{border:1px solid var(--line);border-radius:15px;padding:17px;background:#ffffff03}.feature b{display:block;font-size:13px;margin:6px 0}.feature p{font-size:12px;color:var(--muted);margin:0}.foot{max-width:760px;margin:23px auto 0;color:#858793;font-size:12px;text-align:center}.foot strong{color:#c3c4cb}@media(max-width:600px){.top{margin-bottom:46px}.features{grid-template-columns:1fr}.panel{padding:13px}.hero h1{letter-spacing:-2px}.actions .btn{width:100%}}
+.drop{min-height:245px;border:1.5px dashed #4c4e59;border-radius:16px;display:flex;align-items:center;justify-content:center;text-align:center;padding:26px;cursor:pointer;transition:.2s;background:#ffffff03}.drop.over{border-color:var(--accent);background:#c7f36b0b}.upload-icon{width:54px;height:54px;border-radius:17px;background:#c7f36b18;color:var(--accent);display:grid;place-items:center;margin:0 auto 14px;font-size:25px}.drop h2{font-size:18px;margin:0 0 5px}.drop p{color:var(--muted);margin:0 0 15px;font-size:13px}.btn{border:0;border-radius:11px;padding:12px 17px;background:var(--accent);color:#171a11;font-weight:800;cursor:pointer;font-size:14px}.btn:disabled{opacity:.5;cursor:not-allowed}.subtle{font-size:12px;color:var(--muted);margin-top:14px}.file-row{display:flex;align-items:center;gap:13px;padding:15px 0;border-bottom:1px solid var(--line);margin-top:6px}.file-icon{width:44px;height:48px;display:grid;place-items:center;border-radius:10px;background:#292b33;color:var(--accent);font-size:11px;font-weight:800}.file-info{flex:1;min-width:0}.file-name{font-weight:650;overflow-wrap:anywhere}.file-meta{font-size:12px;color:var(--muted)}.remove{background:transparent;color:var(--muted);border:0;cursor:pointer;font-size:19px}.actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;flex-wrap:wrap}.status{margin-top:18px;border-radius:12px;padding:14px;background:#22242a;color:var(--muted);display:none;overflow-wrap:anywhere}.status.show{display:block}.status.ok{color:#d7ff9b;background:#25301c}.status.bad{color:#ffb2b2;background:#351f23}.progress-label{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;min-height:18px}
+.progress{height:4px;background:#343640;border-radius:9px;margin-top:12px;overflow:hidden;display:none}.progress span{display:block;width:35%;height:100%;background:var(--accent);animation:move 1s infinite alternate}@keyframes move{to{transform:translateX(180%)}}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:22px auto 0;max-width:760px}.feature{border:1px solid var(--line);border-radius:15px;padding:17px;background:#ffffff03}.feature b{display:block;font-size:13px;margin:6px 0}.feature p{font-size:12px;color:var(--muted);margin:0}.foot{max-width:760px;margin:23px auto 0;color:#858793;font-size:12px;text-align:center}.foot strong{color:#c3c4cb}@media(max-width:600px){.top{margin-bottom:46px}.features{grid-template-columns:1fr}.panel{padding:13px}.hero h1{letter-spacing:-2px}.actions .btn{width:100%}}
 </style>
 </head>
 <body><main class="wrap">
@@ -44,7 +45,7 @@ INDEX = r"""<!doctype html>
 <input id="file" type="file" accept=".mp3,.mp4,.mov,.m4v,.mkv,.webm,.avi,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.docx,.pptx,.xlsx,.docm,.pptm,.xlsm" hidden>
 <div id="picked" style="display:none"><div class="file-row"><div class="file-icon" id="ext">FILE</div><div class="file-info"><div class="file-name" id="filename"></div><div class="file-meta" id="filesize"></div></div><button class="remove" id="remove" title="Remove file" aria-label="Remove file">×</button></div>
 <div class="actions"><span class="subtle" style="margin:0">Target: under <span id="targetLabel">2 MB</span></span><button class="btn" id="compress">Compress file ↗</button></div></div>
-<div class="progress" id="progress"><span></span></div><div class="status" id="status" role="status" aria-live="polite"></div>
+<div class="progress" id="progress"><span></span></div><div class="progress-label" id="progressLabel" aria-live="polite"></div><div class="status" id="status" role="status" aria-live="polite"></div>
 </section>
 <section class="features"><div class="feature"><span>↘</span><b>Format-aware</b><p>Downloads keep the original extension and file format.</p></div><div class="feature"><span>◎</span><b>Honest results</b><p>No fake success if a file remains above the size target.</p></div><div class="feature"><span>⌁</span><b>Short-lived processing</b><p>Files use temporary processing storage and are deleted after processing.</p></div></section>
 <div class="foot"><strong>Note:</strong> Not every file can be reduced below 2 MB without losing content or changing format. Office files may compress only slightly. Avoid uploading sensitive documents to a public deployment.</div>
@@ -61,13 +62,57 @@ function setFile(f){if(!f)return;selected=f;document.querySelector('#filename').
 function clearFile(){selected=null;fileInput.value='';picked.style.display='none';statusBox.className='status';progress.style.display='none'}
 document.querySelector('#choose').onclick=()=>fileInput.click();drop.onclick=e=>{if(e.target.id!=='choose')fileInput.click()};fileInput.onchange=()=>setFile(fileInput.files[0]);document.querySelector('#remove').onclick=clearFile;
 for(const ev of ['dragenter','dragover'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')});for(const ev of ['dragleave','drop'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')});drop.addEventListener('drop',e=>setFile(e.dataTransfer.files[0]));
-document.querySelector('#compress').onclick=async()=>{if(!selected)return;if(selected.size>MAXMB*1048576){showStatus(`This file exceeds the ${MAXLABEL} upload limit.`,'bad');return}
-const btn=document.querySelector('#compress');btn.disabled=true;progress.style.display='block';showStatus('Compressing your file…');
-try{const fd=new FormData();fd.append('file',selected);fd.append('target_mb',targetInput.value);const res=await fetch('/api/compress',{method:'POST',body:fd});const type=res.headers.get('content-type')||'';if(!res.ok||type.includes('application/json')){const data=await res.json();throw new Error(data.detail||'Compression failed.')}
-const blob=await res.blob();const outName=res.headers.get('X-Output-Filename')||selected.name;const size=Number(res.headers.get('X-Output-Size')||blob.size);const targetBytes=Number(targetInput.value)*1048576;if(size>=targetBytes)throw new Error(`The compressed result is ${fmt(size)}, still above the selected ${targetLabel.textContent} target. No download was produced. Try a smaller file or a format-specific optimization.`);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=outName;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showStatus(`Done — ${fmt(selected.size)} → ${fmt(size)}. Your download is ready.`,'ok')
-}catch(e){showStatus(e.message||'Something went wrong.','bad')}finally{btn.disabled=false;progress.style.display='none'}
+document.querySelector('#compress').onclick=()=>{
+if(!selected)return;
+if(selected.size>MAXMB*1048576){showStatus(`This file exceeds the ${MAXLABEL} upload limit.`,'bad');return}
+const btn=document.querySelector('#compress'),label=document.querySelector('#progressLabel');
+btn.disabled=true;progress.style.display='block';label.textContent='Preparing upload…';showStatus('Uploading your file…');
+const fd=new FormData();fd.append('file',selected);fd.append('target_mb',targetInput.value);
+const xhr=new XMLHttpRequest();xhr.open('POST','/api/compress');xhr.responseType='blob';
+xhr.upload.onprogress=e=>{if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);label.textContent=pct<100?`Uploading… ${pct}%`:'Upload complete — compressing on the server…';const bar=progress.querySelector('span');if(bar)bar.style.width=pct+'%'}};
+xhr.upload.onload=()=>{label.textContent='Upload complete — compressing on the server…';showStatus('Your file is uploaded. Compression is in progress…')};
+xhr.onload=async()=>{
+try{
+if(xhr.status<200||xhr.status>=300){
+let message='Compression failed.';
+try{const raw=await xhr.response.text();const parsed=JSON.parse(raw);message=parsed.detail||message}catch{}
+throw new Error(message)
+}
+const blob=xhr.response;const outName=xhr.getResponseHeader('X-Output-Filename')||selected.name;const size=Number(xhr.getResponseHeader('X-Output-Size')||blob.size);const targetBytes=Number(targetInput.value)*1048576;
+if(size>=targetBytes)throw new Error(`The compressed result is ${fmt(size)}, still above the selected ${targetLabel.textContent} target. No download was produced.`);
+const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=outName;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+showStatus(`Done — ${fmt(selected.size)} → ${fmt(size)}. Your download is ready.`,'ok');label.textContent='Compression complete.'
+}catch(e){showStatus(e.message||'Something went wrong.','bad');label.textContent=''}
+finally{btn.disabled=false;progress.style.display='none'}
+};
+xhr.onerror=()=>{showStatus('Network error during upload or compression. Please retry.','bad');btn.disabled=false;progress.style.display='none';label.textContent=''};
+xhr.onabort=()=>{showStatus('Upload was cancelled.','bad');btn.disabled=false;progress.style.display='none';label.textContent=''};
+xhr.send(fd);
 };
 </script></body></html>""".replace("MAXMB_VALUE", "__MAXMB__").replace("MAXMB MB", "__MAXMB__ MB")
+
+@app.get("/health")
+def health():
+    """Lightweight health check for the hosting platform."""
+    return {"status": "ok"}
+
+
+@app.get("/api/capabilities")
+def capabilities():
+    """Expose supported formats and configured upload/target limits to clients."""
+    return {
+        "formats": {
+            "images": sorted(IMAGE_FORMATS.keys()),
+            "audio": [".mp3"],
+            "video": sorted(VIDEO_EXTS),
+            "documents": [".pdf"],
+            "office": sorted(OFFICE_EXTS),
+        },
+        "max_upload_mb": MAX_UPLOAD_MB,
+        "target_sizes_mb": [0.5, 1, 2, 5, 10],
+        "video_requires_ffmpeg": True,
+    }
+
 
 @app.get("/", response_class=HTMLResponse)
 def home():
