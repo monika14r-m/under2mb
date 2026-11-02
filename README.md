@@ -10,6 +10,13 @@ A FastAPI file compressor that attempts to reduce supported files to a chosen ta
 - PDF
 - Office: DOCX, DOCM, PPTX, PPTM, XLSX, XLSM
 
+## Features
+
+- Live upload progress in the browser, followed by a separate server-side compression status.
+- Health endpoint at `/health` for deployment health checks.
+- Capabilities endpoint at `/api/capabilities` listing supported formats, target sizes, and configured upload limit.
+- Large video uploads are streamed to temporary disk storage in 8 MiB chunks rather than loaded into RAM.
+
 ## Large video uploads
 
 Video uploads are streamed in 8 MiB chunks to temporary disk storage instead of being read entirely into RAM. FFprobe reads the duration, and FFmpeg calculates a target bitrate from the selected size and duration. It then tries lower audio bitrates and resolutions until the output is below the target. Temporary files are deleted automatically after the request finishes.
@@ -20,6 +27,7 @@ Video uploads are streamed in 8 MiB chunks to temporary disk storage instead of 
 - Large uploads can still be blocked by the hosting provider, reverse proxy, browser connection, temporary disk capacity, or memory/CPU limits before the application sees them.
 - The included Render free plan has limited CPU/RAM and is not ideal for large video processing. A configured 5 GB application limit does not guarantee the hosting platform can accept or process 5 GB requests.
 - Temporary processing files are not retained after processing. Do not upload sensitive files to a public instance.
+- Upload progress measures transfer to the server; it does not estimate encoding progress. Server-side video encoding can take additional time.
 
 ## Run locally
 
