@@ -16,6 +16,14 @@ A FastAPI file compressor that attempts to reduce supported files to a chosen ta
 - Health endpoint at `/health` for deployment health checks.
 - Capabilities endpoint at `/api/capabilities` listing supported formats, target sizes, and configured upload limit.
 - Large video uploads are streamed to temporary disk storage in 8 MiB chunks rather than loaded into RAM.
+- Non-video uploads have a separate memory-aware size limit; Office ZIP archives are protected against excessive expansion and entry counts.
+
+## Upload safety limits
+
+- MAX_UPLOAD_MB is the application-level limit for video uploads (default 5120 MB). Video data is streamed to temporary disk storage.
+- MAX_BUFFERED_UPLOAD_MB limits image, audio, PDF, and Office uploads that are currently processed in memory (default 128 MB). This prevents a large non-video request from exhausting the server's RAM.
+- Office archives are additionally limited by MAX_OFFICE_UNCOMPRESSED_MB (default 128 MB total), MAX_OFFICE_MEMBER_MB (default 64 MB per entry), and MAX_OFFICE_ENTRIES (default 10000). Members are copied in chunks, and both declared and actual expansion are checked.
+- These are application limits; hosting-provider request, disk, memory, and timeout limits still apply.
 
 ## Large video uploads
 
@@ -47,7 +55,9 @@ docker run --rm -p 8000:8000 -e MAX_UPLOAD_MB=5120 under2mb
 
 ## Configuration
 
-- `MAX_UPLOAD_MB`: application-level maximum upload size (default 5120 in Render config).
+- `MAX_UPLOAD_MB`: application-level video upload size limit (default 5120 in Render config).
+- `MAX_BUFFERED_UPLOAD_MB`: maximum upload size for non-video formats processed in memory (default 128).
+- `MAX_OFFICE_UNCOMPRESSED_MB`, `MAX_OFFICE_MEMBER_MB`, `MAX_OFFICE_ENTRIES`: Office archive expansion and entry-count safeguards (defaults 128 MB, 64 MB, and 10000).
 - `TARGET_BYTES`: default target size in bytes (default 2097152, or 2 MiB).
 
 The web UI allows targets of 500 KB, 1 MB, 2 MB, 5 MB and 10 MB.

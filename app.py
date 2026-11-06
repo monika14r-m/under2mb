@@ -13,12 +13,20 @@ app = FastAPI(title="Under2MB", docs_url=None, redoc_url=None)
 TARGET_BYTES = int(os.getenv("TARGET_BYTES", str(2 * 1024 * 1024)))
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "5120"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+MAX_BUFFERED_UPLOAD_MB = int(os.getenv("MAX_BUFFERED_UPLOAD_MB", "128"))
+MAX_BUFFERED_UPLOAD_BYTES = MAX_BUFFERED_UPLOAD_MB * 1024 * 1024
+MAX_OFFICE_UNCOMPRESSED_MB = int(os.getenv("MAX_OFFICE_UNCOMPRESSED_MB", "128"))
+MAX_OFFICE_UNCOMPRESSED_BYTES = MAX_OFFICE_UNCOMPRESSED_MB * 1024 * 1024
+MAX_OFFICE_MEMBER_MB = int(os.getenv("MAX_OFFICE_MEMBER_MB", "64"))
+MAX_OFFICE_MEMBER_BYTES = min(MAX_OFFICE_UNCOMPRESSED_BYTES, MAX_OFFICE_MEMBER_MB * 1024 * 1024)
+MAX_OFFICE_ENTRIES = int(os.getenv("MAX_OFFICE_ENTRIES", "10000"))
 OFFICE_EXTS = {".docx", ".pptx", ".xlsx", ".docm", ".pptm", ".xlsm"}
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 IMAGE_FORMATS = {
     ".jpg": "JPEG", ".jpeg": "JPEG", ".png": "PNG",
     ".webp": "WEBP", ".bmp": "BMP", ".tif": "TIFF", ".tiff": "TIFF",
 }
+SUPPORTED_EXTS = set(IMAGE_FORMATS) | OFFICE_EXTS | VIDEO_EXTS | {".mp3", ".pdf"}
 
 INDEX = r"""<!doctype html>
 <html lang="en">
@@ -40,7 +48,7 @@ INDEX = r"""<!doctype html>
 <header class="top"><div class="brand">under<span>2</span>mb<span>.</span></div><div class="pill">PRIVATE · FORMAT-AWARE</div></header>
 <section class="hero"><div class="eyebrow">LESS WEIGHT. SAME FORMAT.</div><h1>Your files, <span style="color:var(--accent)">lighter.</span></h1><p>Compress supported files toward your chosen size, then download in the original file format. If a file can't reach the target safely, we'll tell you.</p></section>
 <section class="panel">
-<div class="drop" id="drop"><div><div class="upload-icon">↑</div><h2>Drop your file here</h2><p>or select a file from your device</p><button class="btn" id="choose" type="button">Choose file</button><div class="subtle">Up to MAXLIMIT per file · MP4, MOV, M4V, MKV, WEBM, AVI, MP3, PDF, JPG, PNG, WEBP, BMP, TIFF, DOCX, DOCM, PPTX, PPTM, XLSX, XLSM</div></div></div>
+<div class="drop" id="drop"><div><div class="upload-icon">↑</div><h2>Drop your file here</h2><p>or select a file from your device</p><button class="btn" id="choose" type="button">Choose file</button><div class="subtle">Videos up to MAXVIDEO_LIMIT · other files up to MAXBUFFERED_LIMIT · MP4, MOV, M4V, MKV, WEBM, AVI, MP3, PDF, JPG, PNG, WEBP, BMP, TIFF, DOCX, DOCM, PPTX, PPTM, XLSX, XLSM</div></div></div>
 <div class="actions" style="margin:0 0 14px"><label for="target" style="color:var(--muted);font-size:13px">Target maximum size</label><select id="target" style="background:#22242a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><option value="0.5">500 KB</option><option value="1">1 MB</option><option value="2" selected>2 MB</option><option value="5">5 MB</option><option value="10">10 MB</option></select></div>
 <input id="file" type="file" accept=".mp3,.mp4,.mov,.m4v,.mkv,.webm,.avi,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.docx,.pptx,.xlsx,.docm,.pptm,.xlsm" hidden>
 <div id="picked" style="display:none"><div class="file-row"><div class="file-icon" id="ext">FILE</div><div class="file-info"><div class="file-name" id="filename"></div><div class="file-meta" id="filesize"></div></div><button class="remove" id="remove" title="Remove file" aria-label="Remove file">×</button></div>
@@ -51,20 +59,31 @@ INDEX = r"""<!doctype html>
 <div class="foot"><strong>Note:</strong> Not every file can be reduced below 2 MB without losing content or changing format. Office files may compress only slightly. Avoid uploading sensitive documents to a public deployment.</div>
 </main>
 <script>
-const MAXMB=MAXMB_VALUE;const MAXLABEL='MAXLABEL_VALUE';
+const MAXVIDEO_MB=__MAXVIDEO_MB__;
+const MAXBUFFERED_MB=__MAXBUFFERED_MB__;
+const VIDEO_EXTS=new Set(['.mp4','.mov','.m4v','.mkv','.webm','.avi']);
+function uploadLimitFor(file){
+  const dot=file.name.lastIndexOf('.');
+  const ext=dot>=0?file.name.slice(dot).toLowerCase():'';
+  const isVideo=VIDEO_EXTS.has(ext);
+  const mb=isVideo?MAXVIDEO_MB:MAXBUFFERED_MB;
+  const label=mb>=1024?(mb/1024)+' GB':mb+' MB';
+  return {bytes:mb*1048576,label};
+}
 const fileInput=document.querySelector('#file'), drop=document.querySelector('#drop'), picked=document.querySelector('#picked'), statusBox=document.querySelector('#status'), progress=document.querySelector('#progress'), targetInput=document.querySelector('#target');
 const targetLabel=document.querySelector('#targetLabel');
 targetInput.addEventListener('change',()=>{targetLabel.textContent=targetInput.value==='0.5'?'500 KB':targetInput.value+' MB'});
 let selected=null;
 function fmt(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(2)+' MB'}
 function showStatus(msg,kind=''){statusBox.className='status show '+kind;statusBox.textContent=msg}
-function setFile(f){if(!f)return;selected=f;document.querySelector('#filename').textContent=f.name;document.querySelector('#filesize').textContent=fmt(f.size);document.querySelector('#ext').textContent=(f.name.split('.').pop()||'FILE').slice(0,5).toUpperCase();picked.style.display='block';statusBox.className='status';if(f.size>MAXMB*1048576)showStatus(`This file is larger than the ${MAXLABEL} upload limit.`,'bad')}
+function setFile(f){if(!f)return;selected=f;document.querySelector('#filename').textContent=f.name;document.querySelector('#filesize').textContent=fmt(f.size);document.querySelector('#ext').textContent=(f.name.split('.').pop()||'FILE').slice(0,5).toUpperCase();picked.style.display='block';statusBox.className='status';const limit=uploadLimitFor(f);if(f.size>limit.bytes)showStatus(`This file is larger than the ${limit.label} upload limit for this format.`,'bad')}
 function clearFile(){selected=null;fileInput.value='';picked.style.display='none';statusBox.className='status';progress.style.display='none'}
 document.querySelector('#choose').onclick=()=>fileInput.click();drop.onclick=e=>{if(e.target.id!=='choose')fileInput.click()};fileInput.onchange=()=>setFile(fileInput.files[0]);document.querySelector('#remove').onclick=clearFile;
 for(const ev of ['dragenter','dragover'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')});for(const ev of ['dragleave','drop'])drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')});drop.addEventListener('drop',e=>setFile(e.dataTransfer.files[0]));
 document.querySelector('#compress').onclick=()=>{
 if(!selected)return;
-if(selected.size>MAXMB*1048576){showStatus(`This file exceeds the ${MAXLABEL} upload limit.`,'bad');return}
+const uploadLimit=uploadLimitFor(selected);
+if(selected.size>uploadLimit.bytes){showStatus(`This file exceeds the ${uploadLimit.label} upload limit for this format.`,'bad');return}
 const btn=document.querySelector('#compress'),label=document.querySelector('#progressLabel');
 btn.disabled=true;progress.style.display='block';label.textContent='Preparing upload…';showStatus('Uploading your file…');
 const fd=new FormData();fd.append('file',selected);fd.append('target_mb',targetInput.value);
@@ -109,6 +128,8 @@ def capabilities():
             "office": sorted(OFFICE_EXTS),
         },
         "max_upload_mb": MAX_UPLOAD_MB,
+        "max_video_upload_mb": MAX_UPLOAD_MB,
+        "max_buffered_upload_mb": min(MAX_UPLOAD_MB, MAX_BUFFERED_UPLOAD_MB),
         "target_sizes_mb": [0.5, 1, 2, 5, 10],
         "video_requires_ffmpeg": True,
     }
@@ -116,8 +137,16 @@ def capabilities():
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    limit_label = f"{MAX_UPLOAD_MB / 1024:g} GB" if MAX_UPLOAD_MB >= 1024 else f"{MAX_UPLOAD_MB} MB"
-    return HTMLResponse(INDEX.replace("__MAXMB__", str(MAX_UPLOAD_MB)).replace("MAXLIMIT", limit_label).replace("MAXLABEL_VALUE", limit_label))
+    video_limit_label = f"{MAX_UPLOAD_MB / 1024:g} GB" if MAX_UPLOAD_MB >= 1024 else f"{MAX_UPLOAD_MB} MB"
+    buffered_limit_mb = min(MAX_UPLOAD_MB, MAX_BUFFERED_UPLOAD_MB)
+    buffered_limit_label = f"{buffered_limit_mb / 1024:g} GB" if buffered_limit_mb >= 1024 else f"{buffered_limit_mb} MB"
+    page = (
+        INDEX.replace("__MAXVIDEO_MB__", str(MAX_UPLOAD_MB))
+        .replace("__MAXBUFFERED_MB__", str(buffered_limit_mb))
+        .replace("MAXVIDEO_LIMIT", video_limit_label)
+        .replace("MAXBUFFERED_LIMIT", buffered_limit_label)
+    )
+    return HTMLResponse(page)
 
 def compress_image(data: bytes, ext: str) -> bytes:
     with Image.open(io.BytesIO(data)) as img:
@@ -288,17 +317,54 @@ def compress_pdf(data: bytes) -> bytes:
     return out
 
 def repack_office(data: bytes) -> bytes:
+    """Repack an Office ZIP while bounding archive expansion and entry count."""
     src = io.BytesIO(data)
     dest = io.BytesIO()
     with zipfile.ZipFile(src, "r") as zin, zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zout:
-        for item in zin.infolist():
-            payload = zin.read(item.filename)
-            # Keep package member paths and payloads unchanged; repack with deflate.
+        entries = zin.infolist()
+        if len(entries) > MAX_OFFICE_ENTRIES:
+            raise ValueError(f"Office archive contains too many entries (limit: {MAX_OFFICE_ENTRIES}).")
+
+        declared_total = 0
+        actual_total = 0
+        for item in entries:
+            if item.flag_bits & 0x1:
+                raise ValueError("Encrypted Office archives are not supported.")
+            if item.file_size > MAX_OFFICE_MEMBER_BYTES:
+                raise ValueError(
+                    f"An Office archive entry exceeds the {MAX_OFFICE_MEMBER_MB} MB per-entry limit."
+                )
+            declared_total += item.file_size
+            if declared_total > MAX_OFFICE_UNCOMPRESSED_BYTES:
+                raise ValueError(
+                    f"Office archive expands beyond the {MAX_OFFICE_UNCOMPRESSED_MB} MB uncompressed-size limit."
+                )
+
+            # Stream each member into the output archive. Do not call zin.read(),
+            # which would allocate the full uncompressed member in memory.
             info = zipfile.ZipInfo(item.filename, date_time=item.date_time)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = item.external_attr
             info.create_system = item.create_system
-            zout.writestr(info, payload, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+            member_actual = 0
+            with zin.open(item, "r") as source, zout.open(info, "w") as target:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    member_actual += len(chunk)
+                    actual_total += len(chunk)
+                    if member_actual > MAX_OFFICE_MEMBER_BYTES:
+                        raise ValueError(
+                            f"An Office archive entry exceeds the {MAX_OFFICE_MEMBER_MB} MB per-entry limit."
+                        )
+                    if actual_total > MAX_OFFICE_UNCOMPRESSED_BYTES:
+                        raise ValueError(
+                            f"Office archive expands beyond the {MAX_OFFICE_UNCOMPRESSED_MB} MB uncompressed-size limit."
+                        )
+                    target.write(chunk)
+            if member_actual != item.file_size:
+                raise ValueError("Office archive entry size does not match its metadata.")
     return dest.getvalue()
 
 @app.post("/api/compress")
@@ -309,6 +375,9 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
     target_bytes = int(target_mb * 1024 * 1024)
     name = Path(file.filename or "upload.bin").name
     ext = Path(name).suffix.lower()
+    if ext not in SUPPORTED_EXTS:
+        await file.close()
+        raise HTTPException(415, f"Format {ext or '(no extension)'} is not supported for format-preserving compression yet.")
 
     # Large videos are streamed to temporary disk storage, not buffered in RAM.
     if ext in VIDEO_EXTS:
@@ -324,7 +393,8 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
                         break
                     uploaded += len(chunk)
                     if uploaded > MAX_UPLOAD_BYTES:
-                        raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_MB} MB upload limit.")
+                        await file.close()
+                        raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_MB} MB video upload limit.")
                     destination.write(chunk)
             await file.close()
             if uploaded == 0:
@@ -358,11 +428,19 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
                 }
             )
 
-    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    # Non-video formats are processed in memory, so enforce a separate bound.
+    buffered_limit_bytes = min(MAX_UPLOAD_BYTES, MAX_BUFFERED_UPLOAD_BYTES)
+    buffered_limit_mb = buffered_limit_bytes // (1024 * 1024)
+    data = await file.read(buffered_limit_bytes + 1)
+    await file.close()
     if not data:
         raise HTTPException(400, "The uploaded file is empty.")
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_MB} MB upload limit.")
+    if len(data) > buffered_limit_bytes:
+        raise HTTPException(
+            413,
+            f"Non-video files are limited to {buffered_limit_mb} MB because they are processed in memory. "
+            f"Video uploads can use the {MAX_UPLOAD_MB} MB video limit.",
+        )
     if len(data) < target_bytes:
         # Return unchanged data if already under target, preserving original format exactly.
         out = data
@@ -393,7 +471,9 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
     elif ext in OFFICE_EXTS:
         try:
             out = repack_office(data)
-        except (zipfile.BadZipFile, KeyError, OSError) as exc:
+        except ValueError as exc:
+            raise HTTPException(413, str(exc)) from exc
+        except (zipfile.BadZipFile, KeyError, OSError, RuntimeError) as exc:
             raise HTTPException(422, "This Office file is invalid or damaged.") from exc
     else:
         raise HTTPException(415, f"Format {ext or '(no extension)'} is not supported for format-preserving compression yet.")
