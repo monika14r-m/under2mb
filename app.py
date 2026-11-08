@@ -49,7 +49,7 @@ INDEX = r"""<!doctype html>
 <section class="hero"><div class="eyebrow">LESS WEIGHT. SAME FORMAT.</div><h1>Your files, <span style="color:var(--accent)">lighter.</span></h1><p>Compress supported files toward your chosen size, then download in the original file format. If a file can't reach the target safely, we'll tell you.</p></section>
 <section class="panel">
 <div class="drop" id="drop"><div><div class="upload-icon">↑</div><h2>Drop your file here</h2><p>or select a file from your device</p><button class="btn" id="choose" type="button">Choose file</button><div class="subtle">Videos up to MAXVIDEO_LIMIT · other files up to MAXBUFFERED_LIMIT · MP4, MOV, M4V, MKV, WEBM, AVI, MP3, PDF, JPG, PNG, WEBP, BMP, TIFF, DOCX, DOCM, PPTX, PPTM, XLSX, XLSM</div></div></div>
-<div class="actions" style="margin:0 0 14px"><label for="target" style="color:var(--muted);font-size:13px">Target maximum size</label><select id="target" style="background:#22242a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><option value="0.5">500 KB</option><option value="1">1 MB</option><option value="2" selected>2 MB</option><option value="5">5 MB</option><option value="10">10 MB</option></select></div>
+<div class="actions" style="margin:0 0 14px"><label for="target" style="color:var(--muted);font-size:13px">Target maximum size</label><select id="target" style="background:#22242a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><option value="0.5">500 KB</option><option value="1">1 MB</option><option value="2" selected>2 MB</option><option value="5">5 MB</option><option value="10">10 MB</option></select><label for="outputFormat" style="color:var(--muted);font-size:13px">Image output</label><select id="outputFormat" style="background:#22242a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><option value="original">Keep original</option><option value="jpeg">JPG / JPEG</option><option value="png">PNG</option></select></div>
 <input id="file" type="file" accept=".mp3,.mp4,.mov,.m4v,.mkv,.webm,.avi,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.docx,.pptx,.xlsx,.docm,.pptm,.xlsm" hidden>
 <div id="picked" style="display:none"><div class="file-row"><div class="file-icon" id="ext">FILE</div><div class="file-info"><div class="file-name" id="filename"></div><div class="file-meta" id="filesize"></div></div><button class="remove" id="remove" title="Remove file" aria-label="Remove file">×</button></div>
 <div class="actions"><span class="subtle" style="margin:0">Target: under <span id="targetLabel">2 MB</span></span><button class="btn" id="compress">Compress file ↗</button></div></div>
@@ -71,7 +71,7 @@ function uploadLimitFor(file){
   return {bytes:mb*1048576,label};
 }
 const fileInput=document.querySelector('#file'), drop=document.querySelector('#drop'), picked=document.querySelector('#picked'), statusBox=document.querySelector('#status'), progress=document.querySelector('#progress'), targetInput=document.querySelector('#target');
-const targetLabel=document.querySelector('#targetLabel');
+const targetLabel=document.querySelector('#targetLabel'), outputFormatInput=document.querySelector('#outputFormat');
 targetInput.addEventListener('change',()=>{targetLabel.textContent=targetInput.value==='0.5'?'500 KB':targetInput.value+' MB'});
 let selected=null;
 function fmt(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(2)+' MB'}
@@ -86,7 +86,7 @@ const uploadLimit=uploadLimitFor(selected);
 if(selected.size>uploadLimit.bytes){showStatus(`This file exceeds the ${uploadLimit.label} upload limit for this format.`,'bad');return}
 const btn=document.querySelector('#compress'),label=document.querySelector('#progressLabel');
 btn.disabled=true;progress.style.display='block';label.textContent='Preparing upload…';showStatus('Uploading your file…');
-const fd=new FormData();fd.append('file',selected);fd.append('target_mb',targetInput.value);
+const fd=new FormData();fd.append('file',selected);fd.append('target_mb',targetInput.value);fd.append('output_format',outputFormatInput.value);
 const xhr=new XMLHttpRequest();xhr.open('POST','/api/compress');xhr.responseType='blob';
 xhr.upload.onprogress=e=>{if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);label.textContent=pct<100?`Uploading… ${pct}%`:'Upload complete — compressing on the server…';const bar=progress.querySelector('span');if(bar)bar.style.width=pct+'%'}};
 xhr.upload.onload=()=>{label.textContent='Upload complete — compressing on the server…';showStatus('Your file is uploaded. Compression is in progress…')};
@@ -170,6 +170,44 @@ def compress_image(data: bytes, ext: str) -> bytes:
         elif fmt == "TIFF":
             img.save(output, format=fmt, compression="tiff_lzw")
         return output.getvalue()
+
+
+def convert_compress_image(data: bytes, output_format: str, target_bytes: int) -> bytes:
+    """Convert an image to JPEG or PNG and reduce dimensions/quality to meet a size target."""
+    fmt = "JPEG" if output_format == "jpeg" else "PNG"
+    with Image.open(io.BytesIO(data)) as source:
+        source.load()
+        image = source.copy()
+    if fmt == "JPEG" and image.mode not in ("RGB", "L"):
+        # JPEG has no alpha channel; composite transparent pixels onto white.
+        if "A" in image.getbands() or "transparency" in image.info:
+            rgba = image.convert("RGBA")
+            background = Image.new("RGB", rgba.size, "white")
+            background.paste(rgba, mask=rgba.getchannel("A"))
+            image = background
+        else:
+            image = image.convert("RGB")
+    elif fmt == "PNG" and image.mode not in ("1", "L", "LA", "P", "RGB", "RGBA", "I", "I;16", "F"):
+        image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+
+    # Try sensible quality levels first; progressively downscale only if needed.
+    scales = [1.0, 0.85, 0.70, 0.55, 0.40, 0.30]
+    qualities = [88, 80, 72, 64, 55, 45, 35] if fmt == "JPEG" else [None]
+    for scale in scales:
+        candidate = image
+        if scale < 1:
+            dimensions = (max(1, int(image.width * scale)), max(1, int(image.height * scale)))
+            candidate = image.resize(dimensions, Image.Resampling.LANCZOS)
+        for quality in qualities:
+            output = io.BytesIO()
+            if fmt == "JPEG":
+                candidate.save(output, format="JPEG", quality=quality, optimize=True, progressive=True)
+            else:
+                candidate.save(output, format="PNG", optimize=True, compress_level=9)
+            result = output.getvalue()
+            if len(result) < target_bytes:
+                return result
+    raise ValueError("This image could not reach the selected size target, even after reducing quality or dimensions. Try a larger target size.")
 
 
 def compress_mp3(data: bytes, target_bytes: int) -> bytes:
@@ -368,13 +406,24 @@ def repack_office(data: bytes) -> bytes:
     return dest.getvalue()
 
 @app.post("/api/compress")
-async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
+async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), output_format: str = Form("original")):
     allowed_targets = {0.5, 1.0, 2.0, 5.0, 10.0}
     if target_mb not in allowed_targets:
         raise HTTPException(400, "Choose a supported target size: 500 KB, 1 MB, 2 MB, 5 MB, or 10 MB.")
     target_bytes = int(target_mb * 1024 * 1024)
+    if output_format not in {"original", "jpeg", "png"}:
+        raise HTTPException(400, "Choose original format, JPG/JPEG, or PNG.")
     name = Path(file.filename or "upload.bin").name
     ext = Path(name).suffix.lower()
+    input_ext = ext
+    if output_format != "original" and ext not in IMAGE_FORMATS:
+        raise HTTPException(400, "Format conversion is currently available for images only.")
+    if output_format == "jpeg":
+        ext = ".jpg"
+        name = str(Path(name).with_suffix(".jpg"))
+    elif output_format == "png":
+        ext = ".png"
+        name = str(Path(name).with_suffix(".png"))
     if ext not in SUPPORTED_EXTS:
         await file.close()
         raise HTTPException(415, f"Format {ext or '(no extension)'} is not supported for format-preserving compression yet.")
@@ -441,12 +490,17 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0)):
             f"Non-video files are limited to {buffered_limit_mb} MB because they are processed in memory. "
             f"Video uploads can use the {MAX_UPLOAD_MB} MB video limit.",
         )
-    if len(data) < target_bytes:
+    if input_ext in IMAGE_FORMATS and output_format != "original":
+        try:
+            out = convert_compress_image(data, output_format, target_bytes)
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise HTTPException(422, str(exc) if isinstance(exc, ValueError) else "This image could not be processed. The file may be damaged or unsupported.") from exc
+    elif len(data) < target_bytes:
         # Return unchanged data if already under target, preserving original format exactly.
         out = data
-    elif ext in IMAGE_FORMATS:
+    elif input_ext in IMAGE_FORMATS:
         try:
-            out = compress_image(data, ext)
+            out = compress_image(data, input_ext)
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise HTTPException(422, "This image could not be processed. The file may be damaged or unsupported.") from exc
     elif ext == ".mp3":
