@@ -122,6 +122,7 @@ def capabilities():
     return {
         "formats": {
             "images": sorted(IMAGE_FORMATS.keys()),
+            "image_output_formats": ["original", "jpeg", "png"],
             "audio": [".mp3"],
             "video": sorted(VIDEO_EXTS),
             "documents": [".pdf"],
