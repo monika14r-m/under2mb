@@ -61,3 +61,14 @@ docker run --rm -p 8000:8000 -e MAX_UPLOAD_MB=5120 under2mb
 - `TARGET_BYTES`: default target size in bytes (default 2097152, or 2 MiB).
 
 The web UI allows targets of 500 KB, 1 MB, 2 MB, 5 MB and 10 MB.
+
+
+## Image format conversion
+
+The web compressor supports optional image conversion in addition to format-preserving compression:
+
+- PNG to JPG/JPEG (transparent pixels are composited onto a white background because JPEG does not support transparency).
+- JPG/JPEG to PNG (the output is a real PNG image, not a renamed JPEG).
+- Keep the original image format.
+
+Choose the output format and target size in the web interface. Conversion is performed by Pillow, and the resulting file is checked against the selected target before download. JPEG conversion can reduce quality; PNG conversion preserves pixel values but may need dimension reduction to fit a strict size target. Not every image can fit below 2 MB without significant quality or dimension changes, so the app reports a clear error rather than returning an oversized file.
