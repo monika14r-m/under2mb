@@ -18,6 +18,14 @@ A FastAPI file compressor that attempts to reduce supported files to a chosen ta
 - Large video uploads are streamed to temporary disk storage in 8 MiB chunks rather than loaded into RAM.
 - Non-video uploads have a separate memory-aware size limit; Office ZIP archives are protected against excessive expansion and entry counts.
 
+## Runtime architecture and deployment
+
+The Render service defined in `render.yaml` builds `Dockerfile`, whose command starts `uvicorn app:app`. That means the Render upload interface is the FastAPI root route in `app.py`, which serves the embedded `INDEX` page and sends conversions to the same file's `/api/compress` endpoint.
+
+The repository also contains a separate browser-only interface in root `index.html` with `main.js` and `imageCompressor.js`. Those files are not mounted or served by the Render FastAPI container. The similarly named `app (3).py` is not referenced by the Docker command. Keep changes to the Render upload/conversion flow in `app.py` and its tests rather than maintaining a second implementation in these separate entry points.
+
+The automated test workflow is `.github/workflows/tests.yml`. The root-level `deploy.yml` is outside GitHub Actions' required `.github/workflows/` directory and is not an Actions workflow.
+
 ## Upload safety limits
 
 - MAX_UPLOAD_MB is the application-level limit for video uploads (default 5120 MB). Video data is streamed to temporary disk storage.
@@ -62,13 +70,14 @@ docker run --rm -p 8000:8000 -e MAX_UPLOAD_MB=5120 under2mb
 
 The web UI allows targets of 500 KB, 1 MB, 2 MB, 5 MB and 10 MB.
 
-
 ## Image format conversion
 
-The web compressor supports optional image conversion in addition to format-preserving compression:
+The Render web compressor supports optional image conversion in addition to format-preserving compression:
 
 - PNG to JPG/JPEG (transparent pixels are composited onto a white background because JPEG does not support transparency).
 - JPG/JPEG to PNG (the output is a real PNG image, not a renamed JPEG).
 - Keep the original image format.
 
-Choose the output format and target size in the web interface. Conversion is performed by Pillow, and the resulting file is checked against the selected target before download. JPEG conversion can reduce quality; PNG conversion preserves pixel values but may need dimension reduction to fit a strict size target. Not every image can fit below 2 MB without significant quality or dimension changes, so the app reports a clear error rather than returning an oversized file.
+Choose the output format and target size in the Render web interface. Conversion is performed by Pillow, and the resulting file is checked against the selected target before download. JPEG conversion can reduce quality; PNG conversion preserves pixel values and transparency but may need dimension reduction to fit a strict size target. Not every image can fit below 2 MB without significant quality or dimension changes, so the app reports a clear error rather than returning an oversized file.
+
+API-level regression tests verify the actual downloaded image encoding, extension, MIME type, reported byte count, transparency handling, and the 422 failure path when the target cannot be met.
