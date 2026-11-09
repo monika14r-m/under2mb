@@ -57,6 +57,16 @@ def test_jpeg_to_png_api_returns_matching_download_and_real_png():
         assert result.format == "PNG"
 
 
+def test_jpg_alias_to_png_api_returns_matching_download_and_real_png():
+    source = make_image("JPEG", "RGB", (120, 60, 30))
+
+    response = post_conversion("photo.jpg", source, "image/jpeg", "png")
+
+    assert_download_contract(response, filename="photo.png", mime="image/png")
+    with Image.open(io.BytesIO(response.content)) as result:
+        assert result.format == "PNG"
+
+
 def test_png_output_preserves_transparency():
     image = Image.new("RGBA", (16, 16), (240, 20, 10, 0))
     image.putpixel((0, 0), (10, 80, 160, 255))
