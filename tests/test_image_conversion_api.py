@@ -83,6 +83,16 @@ def test_png_output_preserves_transparency():
         assert result.getpixel((0, 0))[3] == 255
 
 
+def test_conversion_api_rejects_images_above_pixel_limit(monkeypatch):
+    monkeypatch.setattr(service, "MAX_IMAGE_PIXELS", 100)
+    source = make_image("PNG", "RGB", (20, 80, 160), size=(12, 12))
+
+    response = post_conversion("large.png", source, "image/png", "jpeg")
+
+    assert response.status_code == 422
+    assert "100-pixel processing limit" in response.json()["detail"]
+
+
 def test_conversion_target_failure_returns_clear_422_without_download(monkeypatch):
     def fail_conversion(_data, _format, _target):
         raise ValueError(
