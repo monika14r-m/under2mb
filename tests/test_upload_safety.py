@@ -93,3 +93,4 @@ def test_capabilities_reports_video_and_buffered_limits():
     payload = response.json()
     assert payload["max_video_upload_mb"] == service.MAX_UPLOAD_MB
     assert payload["max_buffered_upload_mb"] == min(service.MAX_UPLOAD_MB, service.MAX_BUFFERED_UPLOAD_MB)
+    assert payload["max_image_pixels"] == service.MAX_IMAGE_PIXELS
