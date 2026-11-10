@@ -20,6 +20,9 @@ MAX_OFFICE_UNCOMPRESSED_BYTES = MAX_OFFICE_UNCOMPRESSED_MB * 1024 * 1024
 MAX_OFFICE_MEMBER_MB = int(os.getenv("MAX_OFFICE_MEMBER_MB", "64"))
 MAX_OFFICE_MEMBER_BYTES = min(MAX_OFFICE_UNCOMPRESSED_BYTES, MAX_OFFICE_MEMBER_MB * 1024 * 1024)
 MAX_OFFICE_ENTRIES = int(os.getenv("MAX_OFFICE_ENTRIES", "10000"))
+MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "20000000"))
+if MAX_IMAGE_PIXELS <= 0:
+    raise ValueError("MAX_IMAGE_PIXELS must be a positive integer.")
 OFFICE_EXTS = {".docx", ".pptx", ".xlsx", ".docm", ".pptm", ".xlsm"}
 VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 IMAGE_FORMATS = {
@@ -56,7 +59,7 @@ INDEX = r"""<!doctype html>
 <div class="progress" id="progress"><span></span></div><div class="progress-label" id="progressLabel" aria-live="polite"></div><div class="status" id="status" role="status" aria-live="polite"></div>
 </section>
 <section class="features"><div class="feature"><span>↘</span><b>Format-aware</b><p>Downloads keep the original extension and file format.</p></div><div class="feature"><span>◎</span><b>Honest results</b><p>No fake success if a file remains above the size target.</p></div><div class="feature"><span>⌁</span><b>Short-lived processing</b><p>Files use temporary processing storage and are deleted after processing.</p></div></section>
-<div class="foot"><strong>Note:</strong> Not every file can be reduced below 2 MB without losing content or changing format. Office files may compress only slightly. Avoid uploading sensitive documents to a public deployment.</div>
+<div class="foot"><strong>Note:</strong> Not every file can be reduced below 2 MB without losing content or changing format. Office files may compress only slightly. Images that need processing are limited to __MAX_IMAGE_PIXELS__ decoded pixels; resize larger images before uploading. Avoid uploading sensitive documents to a public deployment.</div>
 </main>
 <script>
 const MAXVIDEO_MB=__MAXVIDEO_MB__;
@@ -131,6 +134,7 @@ def capabilities():
         "max_upload_mb": MAX_UPLOAD_MB,
         "max_video_upload_mb": MAX_UPLOAD_MB,
         "max_buffered_upload_mb": min(MAX_UPLOAD_MB, MAX_BUFFERED_UPLOAD_MB),
+        "max_image_pixels": MAX_IMAGE_PIXELS,
         "target_sizes_mb": [0.5, 1, 2, 5, 10],
         "video_requires_ffmpeg": True,
     }
@@ -146,39 +150,56 @@ def home():
         .replace("__MAXBUFFERED_MB__", str(buffered_limit_mb))
         .replace("MAXVIDEO_LIMIT", video_limit_label)
         .replace("MAXBUFFERED_LIMIT", buffered_limit_label)
+        .replace("__MAX_IMAGE_PIXELS__", f"{MAX_IMAGE_PIXELS:,}")
     )
     return HTMLResponse(page)
 
+def load_image_with_pixel_limit(data: bytes) -> Image.Image:
+    """Decode an image only after its declared dimensions pass the pixel budget."""
+    try:
+        with Image.open(io.BytesIO(data)) as source:
+            pixel_count = source.width * source.height
+            if pixel_count > MAX_IMAGE_PIXELS:
+                raise ValueError(
+                    f"Image has {pixel_count:,} pixels, exceeding the "
+                    f"{MAX_IMAGE_PIXELS:,}-pixel processing limit. Resize it before uploading."
+                )
+            source.load()
+            return source.copy()
+    except Image.DecompressionBombError as exc:
+        raise ValueError(
+            f"Image exceeds the {MAX_IMAGE_PIXELS:,}-pixel processing limit. Resize it before uploading."
+        ) from exc
+
+
 def compress_image(data: bytes, ext: str) -> bytes:
-    with Image.open(io.BytesIO(data)) as img:
-        fmt = IMAGE_FORMATS[ext]
-        output = io.BytesIO()
-        if fmt == "JPEG":
-            if img.mode not in ("RGB", "L"):
-                if "A" in img.getbands():
-                    bg = Image.new("RGB", img.size, "white")
-                    bg.paste(img, mask=img.getchannel("A"))
-                    img = bg
-                else:
-                    img = img.convert("RGB")
-            img.save(output, format=fmt, quality=82, optimize=True, progressive=True)
-        elif fmt == "PNG":
-            img.save(output, format=fmt, optimize=True, compress_level=9)
-        elif fmt == "WEBP":
-            img.save(output, format=fmt, quality=82, method=6)
-        elif fmt == "BMP":
-            img.save(output, format=fmt)
-        elif fmt == "TIFF":
-            img.save(output, format=fmt, compression="tiff_lzw")
-        return output.getvalue()
+    img = load_image_with_pixel_limit(data)
+    fmt = IMAGE_FORMATS[ext]
+    output = io.BytesIO()
+    if fmt == "JPEG":
+        if img.mode not in ("RGB", "L"):
+            if "A" in img.getbands():
+                bg = Image.new("RGB", img.size, "white")
+                bg.paste(img, mask=img.getchannel("A"))
+                img = bg
+            else:
+                img = img.convert("RGB")
+        img.save(output, format=fmt, quality=82, optimize=True, progressive=True)
+    elif fmt == "PNG":
+        img.save(output, format=fmt, optimize=True, compress_level=9)
+    elif fmt == "WEBP":
+        img.save(output, format=fmt, quality=82, method=6)
+    elif fmt == "BMP":
+        img.save(output, format=fmt)
+    elif fmt == "TIFF":
+        img.save(output, format=fmt, compression="tiff_lzw")
+    return output.getvalue()
 
 
 def convert_compress_image(data: bytes, output_format: str, target_bytes: int) -> bytes:
     """Convert an image to JPEG or PNG and reduce dimensions/quality to meet a size target."""
     fmt = "JPEG" if output_format == "jpeg" else "PNG"
-    with Image.open(io.BytesIO(data)) as source:
-        source.load()
-        image = source.copy()
+    image = load_image_with_pixel_limit(data)
     if fmt == "JPEG" and image.mode not in ("RGB", "L"):
         # JPEG has no alpha channel; composite transparent pixels onto white.
         if "A" in image.getbands() or "transparency" in image.info:
@@ -503,7 +524,8 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
         try:
             out = compress_image(data, input_ext)
         except (UnidentifiedImageError, OSError, ValueError) as exc:
-            raise HTTPException(422, "This image could not be processed. The file may be damaged or unsupported.") from exc
+            detail = str(exc) if isinstance(exc, ValueError) else "This image could not be processed. The file may be damaged or unsupported."
+            raise HTTPException(422, detail) from exc
     elif ext == ".mp3":
         try:
             out = compress_mp3(data, target_bytes)
