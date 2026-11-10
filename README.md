@@ -31,6 +31,7 @@ The automated test workflow is `.github/workflows/tests.yml`. The root-level `de
 - MAX_UPLOAD_MB is the application-level limit for video uploads (default 5120 MB). Video data is streamed to temporary disk storage.
 - MAX_BUFFERED_UPLOAD_MB limits image, audio, PDF, and Office uploads that are currently processed in memory (default 128 MB). This prevents a large non-video request from exhausting the server's RAM.
 - Office archives are additionally limited by MAX_OFFICE_UNCOMPRESSED_MB (default 128 MB total), MAX_OFFICE_MEMBER_MB (default 64 MB per entry), and MAX_OFFICE_ENTRIES (default 10000). Members are copied in chunks, and both declared and actual expansion are checked.
+- Image decoding is limited by MAX_IMAGE_PIXELS (default 20,000,000 pixels). The app checks dimensions before loading pixel data and returns HTTP 422 for larger images that require processing; resize them before retrying.
 - These are application limits; hosting-provider request, disk, memory, and timeout limits still apply.
 
 ## Large video uploads
@@ -66,6 +67,7 @@ docker run --rm -p 8000:8000 -e MAX_UPLOAD_MB=5120 under2mb
 - `MAX_UPLOAD_MB`: application-level video upload size limit (default 5120 in Render config).
 - `MAX_BUFFERED_UPLOAD_MB`: maximum upload size for non-video formats processed in memory (default 128).
 - `MAX_OFFICE_UNCOMPRESSED_MB`, `MAX_OFFICE_MEMBER_MB`, `MAX_OFFICE_ENTRIES`: Office archive expansion and entry-count safeguards (defaults 128 MB, 64 MB, and 10000).
+- `MAX_IMAGE_PIXELS`: maximum decoded image pixel count for compression/conversion (default 20,000,000).
 - `TARGET_BYTES`: default target size in bytes (default 2097152, or 2 MiB).
 
 The web UI allows targets of 500 KB, 1 MB, 2 MB, 5 MB and 10 MB.
