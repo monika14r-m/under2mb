@@ -1,8 +1,10 @@
 import io
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
+import app as service
 from app import convert_compress_image
 
 
@@ -33,6 +35,22 @@ class ImageConversionTests(unittest.TestCase):
         result = convert_compress_image(source, "png", 2 * 1024 * 1024)
         with Image.open(io.BytesIO(result)) as output:
             self.assertEqual(output.format, "PNG")
+
+    def test_conversion_rejects_oversized_image_before_decoding(self):
+        source = make_image("PNG", size=(12, 12))
+        with patch.object(service, "MAX_IMAGE_PIXELS", 100), patch.object(
+            Image.Image, "load", side_effect=AssertionError("pixel data must not be decoded")
+        ):
+            with self.assertRaisesRegex(ValueError, "100-pixel processing limit"):
+                convert_compress_image(source, "jpeg", 2 * 1024 * 1024)
+
+    def test_format_preserving_compression_rejects_oversized_image_before_decoding(self):
+        source = make_image("PNG", size=(12, 12))
+        with patch.object(service, "MAX_IMAGE_PIXELS", 100), patch.object(
+            Image.Image, "load", side_effect=AssertionError("pixel data must not be decoded")
+        ):
+            with self.assertRaisesRegex(ValueError, "100-pixel processing limit"):
+                service.compress_image(source, ".png")
 
     def test_conversion_respects_target_or_fails(self):
         source = make_image("PNG", size=(1200, 900))
