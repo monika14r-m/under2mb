@@ -232,43 +232,66 @@ def convert_compress_image(data: bytes, output_format: str, target_bytes: int) -
     raise ValueError("This image could not reach the selected size target, even after reducing quality or dimensions. Try a larger target size.")
 
 
-def compress_mp3(data: bytes, target_bytes: int) -> bytes:
-    """Re-encode MP3 audio at progressively lower bitrates."""
+async def stream_upload_to_path(
+    upload: UploadFile,
+    destination: Path,
+    max_bytes: int,
+    *,
+    chunk_size: int = 1024 * 1024,
+    limit_detail: str = "Upload exceeds the configured size limit.",
+) -> int:
+    """Copy an upload to disk in bounded chunks and enforce its byte limit."""
+    uploaded = 0
+    try:
+        with destination.open("wb") as output:
+            while True:
+                chunk = await upload.read(chunk_size)
+                if not chunk:
+                    break
+                uploaded += len(chunk)
+                if uploaded > max_bytes:
+                    raise HTTPException(status_code=413, detail=limit_detail)
+                output.write(chunk)
+    finally:
+        await upload.close()
+    return uploaded
+
+
+def compress_mp3_file(source: Path, target_bytes: int) -> Path:
+    """Re-encode an MP3 from disk at progressively lower bitrates."""
     import shutil
     import subprocess
-    import tempfile
 
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("MP3 compression requires FFmpeg, but FFmpeg is not installed on this server.")
 
     bitrates = ["128k", "96k", "64k", "48k", "32k"]
-    with tempfile.TemporaryDirectory(prefix="under2mb-") as tmp:
-        source = Path(tmp) / "input.mp3"
-        source.write_bytes(data)
-        last_error = ""
-        for bitrate in bitrates:
-            output = Path(tmp) / f"output-{bitrate}.mp3"
-            command = [
-                ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                "-i", str(source), "-vn", "-codec:a", "libmp3lame",
-                "-b:a", bitrate, "-map_metadata", "0", str(output),
-            ]
-            try:
-                run = subprocess.run(command, capture_output=True, text=True, timeout=180, check=False)
-            except subprocess.TimeoutExpired as exc:
-                raise RuntimeError("MP3 compression timed out. Try a shorter audio file.") from exc
-            if run.returncode != 0 or not output.exists():
-                last_error = (run.stderr or "FFmpeg could not decode this MP3.").strip()[-500:]
-                continue
-            result = output.read_bytes()
-            if len(result) < target_bytes:
-                return result
-        if last_error:
-            raise RuntimeError("FFmpeg could not process this MP3: " + last_error)
-        raise ValueError("MP3 was re-encoded at 128, 96, 64, 48 and 32 kbps but still could not reach the target size.")
+    last_error = ""
+    had_successful_encode = False
+    for bitrate in bitrates:
+        output = source.with_name(f"output-{bitrate}.mp3")
+        command = [
+            ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(source), "-vn", "-codec:a", "libmp3lame",
+            "-b:a", bitrate, "-map_metadata", "0", str(output),
+        ]
+        try:
+            run = subprocess.run(command, capture_output=True, text=True, timeout=180, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("MP3 compression timed out. Try a shorter audio file.") from exc
+        if run.returncode != 0 or not output.exists() or output.stat().st_size == 0:
+            last_error = (run.stderr or "FFmpeg could not decode this MP3.").strip()[-500:]
+            output.unlink(missing_ok=True)
+            continue
+        had_successful_encode = True
+        if output.stat().st_size < target_bytes:
+            return output
+        output.unlink(missing_ok=True)
 
-
+    if last_error and not had_successful_encode:
+        raise RuntimeError("FFmpeg could not process this MP3: " + last_error)
+    raise ValueError("MP3 was re-encoded at 128, 96, 64, 48 and 32 kbps but still could not reach the target size.")
 
 def compress_video_file(source: Path, output: Path, ext: str, target_bytes: int) -> Path:
     """
@@ -499,9 +522,53 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
                 }
             )
 
-    # Non-video formats are processed in memory, so enforce a separate bound.
+    # MP3 is streamed to disk; other non-video formats remain memory-buffered.
     buffered_limit_bytes = min(MAX_UPLOAD_BYTES, MAX_BUFFERED_UPLOAD_BYTES)
     buffered_limit_mb = buffered_limit_bytes // (1024 * 1024)
+    if ext == ".mp3":
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="under2mb-audio-") as tmp:
+            source = Path(tmp) / "input.mp3"
+            limit_detail = (
+                f"MP3 uploads are limited to {buffered_limit_mb} MB by the configured non-video upload cap."
+            )
+            uploaded = await stream_upload_to_path(
+                file, source, buffered_limit_bytes, limit_detail=limit_detail
+            )
+            if uploaded == 0:
+                raise HTTPException(400, "The uploaded file is empty.")
+
+            if uploaded < target_bytes:
+                output = source
+            else:
+                try:
+                    output = compress_mp3_file(source, target_bytes)
+                except ValueError as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                except RuntimeError as exc:
+                    raise HTTPException(503, str(exc)) from exc
+
+            output_size = output.stat().st_size
+            if output_size >= target_bytes:
+                target_label = "500 KB" if target_mb == 0.5 else f"{target_mb:g} MB"
+                raise HTTPException(
+                    422,
+                    f"Compressed MP3 is {output_size / 1048576:.2f} MB, still above the {target_label} target.",
+                )
+            out = output.read_bytes()
+            safe_name = "".join(ch for ch in name if ch not in chr(10) + chr(13) + '"')
+            return Response(
+                content=out,
+                media_type="audio/mpeg",
+                headers={
+                    "X-Output-Filename": name,
+                    "X-Output-Size": str(len(out)),
+                    "Content-Disposition": f'attachment; filename="{safe_name}"',
+                    "Cache-Control": "no-store",
+                },
+            )
+
     data = await file.read(buffered_limit_bytes + 1)
     await file.close()
     if not data:
@@ -526,13 +593,6 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             detail = str(exc) if isinstance(exc, ValueError) else "This image could not be processed. The file may be damaged or unsupported."
             raise HTTPException(422, detail) from exc
-    elif ext == ".mp3":
-        try:
-            out = compress_mp3(data, target_bytes)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(503, str(exc)) from exc
     elif ext in VIDEO_EXTS:
         try:
             out = compress_video(data, ext, target_bytes)
