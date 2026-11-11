@@ -557,7 +557,7 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
                     f"Compressed MP3 is {output_size / 1048576:.2f} MB, still above the {target_label} target.",
                 )
             out = output.read_bytes()
-            safe_name = name.replace('"', "").replace("\\r", "").replace("\\n", "")
+            safe_name = "".join(ch for ch in name if ch not in chr(10) + chr(13) + '"')
             return Response(
                 content=out,
                 media_type="audio/mpeg",
