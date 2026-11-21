@@ -87,3 +87,15 @@ def test_path_components_are_removed_from_output_filename():
     assert response.status_code == 200
     assert response.headers["x-output-filename"] == "note.pdf"
     assert 'filename="note.pdf"' in response.headers["content-disposition"]
+
+
+
+def test_invalid_image_conversion_returns_unprocessable_entity():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "0.5", "output_format": "jpeg"},
+        files={"file": ("broken.png", b"not an image", "image/png")},
+    )
+
+    assert response.status_code == 422
+    assert "could not be processed" in response.json()["detail"]
