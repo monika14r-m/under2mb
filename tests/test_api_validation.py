@@ -47,3 +47,14 @@ def test_empty_upload_returns_bad_request():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "The uploaded file is empty."
+
+
+
+def test_unsupported_extension_without_suffix_is_rejected():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": ("payload", b"data", "application/octet-stream")},
+    )
+
+    assert response.status_code == 415
