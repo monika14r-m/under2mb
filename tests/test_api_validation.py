@@ -74,3 +74,16 @@ def test_small_upload_returns_original_bytes_and_download_metadata():
     assert response.headers["x-output-filename"] == "note.pdf"
     assert response.headers["x-output-size"] == str(len(payload))
     assert response.headers["cache-control"] == "no-store"
+
+
+
+def test_path_components_are_removed_from_output_filename():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": ("../../private/note.pdf", b"small", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-output-filename"] == "note.pdf"
+    assert 'filename="note.pdf"' in response.headers["content-disposition"]
