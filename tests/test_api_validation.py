@@ -58,3 +58,19 @@ def test_unsupported_extension_without_suffix_is_rejected():
     )
 
     assert response.status_code == 415
+
+
+
+def test_small_upload_returns_original_bytes_and_download_metadata():
+    payload = b"small-file-content"
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": ("note.pdf", payload, "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.content == payload
+    assert response.headers["x-output-filename"] == "note.pdf"
+    assert response.headers["x-output-size"] == str(len(payload))
+    assert response.headers["cache-control"] == "no-store"
