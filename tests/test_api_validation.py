@@ -35,3 +35,15 @@ def test_conversion_is_restricted_to_image_uploads():
 
     assert response.status_code == 400
     assert "Format conversion is currently available for images only" in response.json()["detail"]
+
+
+
+def test_empty_upload_returns_bad_request():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": ("empty.jpg", b"", "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "The uploaded file is empty."
