@@ -99,3 +99,35 @@ def test_invalid_image_conversion_returns_unprocessable_entity():
 
     assert response.status_code == 422
     assert "could not be processed" in response.json()["detail"]
+
+
+
+def test_download_filename_sanitizes_windows_paths_and_control_chars():
+    assert service.safe_download_filename("C:\\private\\note\r\n.pdf") == "note__.pdf"
+    assert service.safe_download_filename("photo📷.pdf") == "photo_.pdf"
+    assert service.safe_download_filename('bad"name.pdf') == "bad_name.pdf"
+    assert service.safe_download_filename("  ") == "download.bin"
+
+
+def test_windows_path_is_normalized_in_download_headers():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": (r"C:\Users\private\note.pdf", b"small", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-output-filename"] == "note.pdf"
+    assert response.headers["content-disposition"] == 'attachment; filename="note.pdf"'
+
+
+def test_non_ascii_filename_uses_ascii_safe_download_headers():
+    response = client.post(
+        "/api/compress",
+        data={"target_mb": "2"},
+        files={"file": ("photo📷.pdf", b"small", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-output-filename"] == "photo_.pdf"
+    assert response.headers["content-disposition"] == 'attachment; filename="photo_.pdf"'

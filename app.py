@@ -9,6 +9,17 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, UnidentifiedImageError
 
+
+def safe_download_filename(filename: Optional[str]) -> str:
+    """Return an ASCII-safe basename suitable for response headers."""
+    basename = (filename or "upload.bin").replace("\\", "/").rsplit("/", 1)[-1]
+    sanitized = "".join(
+        character if 32 <= ord(character) < 127 and character != '"' else "_"
+        for character in basename
+    ).strip()
+    return sanitized or "download.bin"
+
+
 app = FastAPI(title="Under2MB", docs_url=None, redoc_url=None)
 TARGET_BYTES = int(os.getenv("TARGET_BYTES", str(2 * 1024 * 1024)))
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "5120"))
@@ -458,7 +469,7 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
     target_bytes = int(target_mb * 1024 * 1024)
     if output_format not in {"original", "jpeg", "png"}:
         raise HTTPException(400, "Choose original format, JPG/JPEG, or PNG.")
-    name = Path(file.filename or "upload.bin").name
+    name = safe_download_filename(file.filename)
     ext = Path(name).suffix.lower()
     input_ext = ext
     if output_format != "original" and ext not in IMAGE_FORMATS:
@@ -511,7 +522,7 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
                 ".mp4": "video/mp4", ".m4v": "video/x-m4v", ".mov": "video/quicktime",
                 ".mkv": "video/x-matroska", ".webm": "video/webm", ".avi": "video/x-msvideo",
             }.get(ext, "application/octet-stream")
-            safe_name = name.replace('"', "")
+            safe_name = name
             return Response(
                 content=out, media_type=media,
                 headers={
@@ -557,7 +568,7 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
                     f"Compressed MP3 is {output_size / 1048576:.2f} MB, still above the {target_label} target.",
                 )
             out = output.read_bytes()
-            safe_name = "".join(ch for ch in name if ch not in chr(10) + chr(13) + '"')
+            safe_name = name
             return Response(
                 content=out,
                 media_type="audio/mpeg",
@@ -620,7 +631,7 @@ async def compress(file: UploadFile = File(...), target_mb: float = Form(2.0), o
     headers = {
         "X-Output-Filename": name,
         "X-Output-Size": str(len(out)),
-        "Content-Disposition": f'attachment; filename="{name.replace(chr(34), "")}"',
+        "Content-Disposition": f'attachment; filename="{name}"',
         "Cache-Control": "no-store",
     }
     media = {
