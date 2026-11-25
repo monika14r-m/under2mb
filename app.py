@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, UnidentifiedImageError
 
+
 def safe_download_filename(filename: Optional[str]) -> str:
     """Return an ASCII-safe basename suitable for response headers."""
     basename = (filename or "upload.bin").replace("\\", "/").rsplit("/", 1)[-1]
